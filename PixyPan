@@ -1,0 +1,100 @@
+// This program fires up the pixy camera and haves it sweep from left to right.
+
+// HeaderFiles
+#include <SPI.h>  
+#include <Pixy.h>
+#include <math.h>
+
+// Initializations
+Pixy pixy;               // Required for use of Pixy
+int i=0;                 // Counter for while loop
+int pitch=0;             // The pitch angle of the camera 0 (fully back), 1024 (fully forward)
+double turn=0;           // Turn is the value that is inputed to the servo from 0 (fully clockwise) to 1024 (fully counterclockwise)
+double angle=0;          // 0-pi/2 is the counterclockwise turn while pi/2 to pi is the clockwise turn
+double angleGain=0.05;   // The rate at which the angle is incremented at. The smaller, the slower and vise-versa
+double sinCalc;          // Variable to hold the sin calculations
+
+// Definitions
+#define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2)       
+#define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2)
+
+
+//////////////////////////////////////////////////////////////
+// Setup Started
+//////////////////////////////////////////////////////////////
+
+class ServoLoop
+{
+public:
+  ServoLoop(int32_t pgain, int32_t dgain);
+
+  void update(int32_t error);
+   
+  int32_t m_pos;
+  int32_t m_prevError;
+  int32_t m_pgain;
+  int32_t m_dgain;
+};
+
+
+ServoLoop panLoop(300, 500);
+ServoLoop tiltLoop(500, 700);
+
+ServoLoop::ServoLoop(int32_t pgain, int32_t dgain)
+{
+  m_pos = PIXY_RCS_CENTER_POS;
+  m_pgain = pgain;
+  m_dgain = dgain;
+  m_prevError = 0x80000000L;
+}
+
+void ServoLoop::update(int32_t error)
+{
+  long int vel;
+  char buf[32];
+  if (m_prevError!=0x80000000)
+  {	
+    vel = (error*m_pgain + (error - m_prevError)*m_dgain)>>10;
+    sprintf(buf, "%ld\n", vel);
+    Serial.print(buf);
+    m_pos += vel;
+    if (m_pos>PIXY_RCS_MAX_POS) 
+      m_pos = PIXY_RCS_MAX_POS; 
+    else if (m_pos<PIXY_RCS_MIN_POS) 
+      m_pos = PIXY_RCS_MIN_POS;
+  }
+  m_prevError = error;
+}
+
+
+
+void setup()
+{
+  Serial.begin(9600);
+  Serial.print("Starting...\n");
+  pixy.init();
+}
+
+//////////////////////////////////////////////////////////////
+// Setup Finished
+//////////////////////////////////////////////////////////////
+
+// Main Searching Loop
+void loop()
+{ 
+  // The turning value is the absolute of the maximum turn rate multiplied by the sin of the angle
+  turn=abs(1024*sin(angle));
+
+  // Delay to control motion: keep this constant.
+  delay(50);
+  
+  // Set servo command.
+  pixy.setServos(turn,pitch);
+
+  // Increment loop count
+  i++;
+
+  // Change the angle as a function of the loop count. Sin function results in oscillations.
+  angle=angleGain*i;
+}
+
